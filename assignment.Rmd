@@ -1,0 +1,237 @@
+---
+title: "Multi-level Modelling Assignment"
+author: "Student number: 8520000"
+output: pdf_document 
+---
+
+```{r setup, include=FALSE}
+```
+
+```{r, echo=FALSE, message = FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE, echo = FALSE, dev = "cairo_pdf")
+```
+
+```{r, include = FALSE}
+library(tidyverse)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+library(fastDummies)
+library(broom)
+library(lme4)
+library(magrittr)
+library(htmlTable)
+library(RColorBrewer)
+library(tinytex)
+library(knitr)
+library(kableExtra)
+library(stargazer)
+library(R2MLwiN) 
+library(arm)
+library(grid)
+library(extrafont)
+
+
+#loading data
+setwd("~/Desktop/Multilevel-Modelling")
+
+mydataNAs <- read.table(file = "coursework.txt", sep = "," , header = TRUE)
+
+mydata <- drop_na(mydataNAs)
+
+#creating dummies and renaming
+
+mydata <- dummy_cols(mydata, select_columns = c('hhtenure', 'hiqual3'), remove_first_dummy = TRUE)
+
+mydata <- mydata %>% rename(rent_local_auth = hhtenure_2, rent_private = hhtenure_3,
+                            school_qual = hiqual3_2, no_qual = hiqual3_3)
+
+#centering age
+
+mydata <- mydata %>% mutate(age = age - 16)
+
+#summary statistics
+a <- mydata %>%
+      group_by(region) %>% 
+      summarise(Number_of_households = n_distinct(hid),
+            Number_of_individuals = n(),
+            Mean_number_of_individuals_per_household = n()/n_distinct(hid))
+
+
+
+b <- mydataNAs %>%
+     group_by(region) %>% 
+     summarise(Number_of_households = n_distinct(hid),
+            Number_of_individuals = n(),
+            Mean_number_of_individuals_per_household = n()/n_distinct(hid)) 
+
+```
+
+## Part A
+
+#### Question 1
+
+**Provide some summary statistics about the levels in the data. How many units are there at each level (overall N of each level), and how many units are there within levels (N within each level).** 
+
+There are 12 different Government office regions (level 3), 4429 different households (level 2), and 4655 individuals (level 1).The table below provides information for every region on the number of households, individuals, and the mean number of individuals per household.
+
+
+
+```{r, echo = FALSE, warning= FALSE, message= FALSE}
+kable(b, col.names =c("Region", "Number of households", "Number of individuals", "Average number of individuals per household"),format = "latex", booktabs = TRUE)
+```
+
+
+However there were some missing values, after dropping rows with incomplete values the dataset contains 12 different Government office regions (level 3), 3883 different households (level 2), and 4064 individuals (level 1).The table below provides information for every region on the number of households and individuals, and the mean number of individuals per household. The rest of this assignment will be conducted with the missing values removed.
+
+
+
+```{r, echo = FALSE, warning= FALSE, message= FALSE}
+kable(a, col.names =c("Region", "Number of households", "Number of individuals", "Average number of individuals per household"),format = "latex", booktabs = TRUE)
+```
+
+#### Question 2
+
+**Specify the generalised equations of a three level multilevel model with random slopes at levels 2 and 3. State the assumptions of the model.**
+
+The generalised equation is:
+
+
+$Y_{ijk} = \beta_0 + \beta_1 x_{1ijk} + v_{0k} + v_{1k}x_{1ijk}   + u_{0jk} + u_{1ijk}x_{1ijk} + e_{ijk}$
+
+Where $Y_{ijk}$ is the expected value of our dependant variable for individual *i* in household *j* in region *k*, $x_{1ijk}$ is a independant variable with random coeffecients at levels two and three, $\beta_0$ is the mean intercept over all slopes, $\beta_1$ is the average slope across all groups (the average in y change across all groups for a 1 unit change in $x_{1ijk}$), and $v_{0k}$,    $v_{1k}x_{1ijk}$,    $u_{0jk}$,    $u_{1ijk}x_{1ijk}$,    $e_{ijk}$ are the random effects associated with level two, level three, and the individual level respectively.
+
+$v_k$ is the effect associated with region *k*, $u_{jk}$ is the effect associated with household *j* within region *k*, and $e_{ijk}$ is the residual error term (the difference between the mean value in household *j*, and the value for individual *i*).
+
+### Question 3
+
+**Start from the single level null model and add in the household and then region levels.** 
+
+```{r, include = FALSE}
+single_null <- lm(nhood_mistrust ~ 1, data = mydata)
+
+twolevel_null_hid <- lmer(nhood_mistrust ~ (1|hid), data = mydata, REML = FALSE)
+
+twolevel_null_region <- lmer(nhood_mistrust ~ (1|region), data = mydata, REML = FALSE)
+
+nullmodel_threelvl <- lmer(nhood_mistrust ~ (1|hid) + (1|region), data = mydata, REML = FALSE)
+
+```
+
+##### **A. Display the model coefficients in a table.**
+
+\begin{tabular}{@{\extracolsep{5pt}}lcccc} 
+\hline \\[-1.8ex] 
+ & \multicolumn{4}{c}{\textit{Dependent variable:Neighborhood Mistrust}} \\ 
+\cline{2-5} \\
+ & Single level null & Two levels (household) & Two levels (region) & Three levels \\ 
+\hline \\[-1.8ex] 
+ Constant & 2.385$^{***}$ & 2.382$^{***}$ & 2.383$^{***}$ & 2.379$^{***}$ \\ 
+  & (2.365, 2.406) & (2.362, 2.403) & (2.343, 2.422) & (2.339, 2.419) \\ 
+  & & & & \\ 
+\hline \\[-1.8ex] 
+\end{tabular} 
+ 
+#### **B. Does the addition of the household level improve the fit of the model?**
+
+We can use the likelihood-ratio test to asses whether the 2 level household model fits the data better than the single level null model. To do so we calculate the likelihood ratio test statistic, and compare the result to a chi-squared distribution on one degree of freedom.
+
+The likelihood ratio test statistic for these models is approximately 94.45, and the 5% point on a chi-squared distribution with two degrees of freedom is approximately 3.84. 
+
+We therefore have strong reasons to believe that the addition of the household level improves the fit of the model.
+
+#### **C.What evidence is there for an improvement in fit?**
+
+There are a number of reasons to believe the addition of the household level improves the fit of the model.
+
+First, the likelihood-ratio test conducted in the answer to the previous question provides strong evidence that we have a statistically significant improvement in model fit.
+
+We can also create a 'caterpillar' plot using the ggplot2 package which displays ranked residuals from the household model (in black), with their 95% confidence intervals (in grey), as well as a red line for the average effect. 
+
+```{r, echo=FALSE,warning= FALSE, message= FALSE}
+
+fit <- twolevel_null_hid
+
+# Extract higher level residuals
+ranef <-ranef(fit)
+ranef.se <- se.ranef(fit)
+u0mn <-ranef$hid
+u0sd <-ranef.se$hid
+# Rank residuals
+
+u0rankmn <- rank(u0mn)
+u0hi <- u0mn + (1.96*u0sd)
+u0lo <- u0mn  - (1.96*u0sd)
+
+u0 <- ranef(fit, postVar = TRUE) 
+
+#You might get a warning message saying to use condVar instead postVar
+
+#Save the standard error of the school-level residuals in the object u0se
+
+u0se <- sqrt(attr(u0[[1]], "postVar")[1, , ]) 
+
+hid <- as.numeric(rownames(u0[[1]]))
+
+#This section of code creates a table of the school-level residuals and gives them a rank
+
+u0tab <- cbind(hid, u0[[1]], u0se)
+
+colnames(u0tab) <- c("hid","u0","u0se")
+
+u0tab <- u0tab[order(u0tab$u0), ]
+
+u0tab <- cbind(u0tab, c(1:dim(u0tab)[1]))
+
+colnames(u0tab)[4] <- "u0rank"
+
+u0tab <- u0tab[order(u0tab$hid), ]
+
+# Combine into data.frame
+d <-data.frame(u0tab$u0rank, u0tab$u0, u0hi, u0lo) 
+
+# Set colors
+palette <- brewer.pal("Greys", n=9)
+color.background = palette[1]
+color.grid.major = palette[5]
+color.axis.text = palette[6]
+color.axis.title = palette[7]
+color.title = palette[9]
+loadfonts()
+# Plot
+
+ggplot()+
+  geom_pointrange(data=u0tab,mapping=aes(x=u0tab$u0rank , y=u0tab$u0,ymin=d$X.Intercept..1,ymax=d$X.Intercept.),   position="identity", size=0.1, color="grey", alpha = 0.5)+
+  geom_point(data=u0tab,mapping=aes(x=u0tab$u0rank , y=u0tab$u0))+
+  theme_bw() +
+  theme(panel.background=element_rect(fill=color.background, color=color.background)) +
+  theme(plot.background=element_rect(fill=color.background, color=color.background)) +
+  theme(panel.border=element_blank(), axis.line=element_line(), axis.line.y=element_blank()) +  
+  theme(panel.grid.major=element_line(colour=color.background,size=.75)) +
+  theme(axis.ticks=element_blank()) +
+  theme(axis.line.x =element_line(colour="#535353", size=.75))+
+  theme(axis.line.y =element_line(colour="#535353", size=.75))+
+  theme(legend.position="none") +
+  xlab("Rank of residuals") +
+  ylab("Conditional modes of r.e. for hid:_cons") +
+  theme(axis.text.x=element_text(size=10,colour="black", family = "Times New Roman")) +
+  theme(axis.text.y=element_text(size=10,colour="black", family = "Times New Roman")) +
+  theme(axis.title.y=element_text(size=10,colour="black",vjust=1.5, family = "Times New Roman")) +
+  theme(axis.title.x=element_text(size=10,colour="black",vjust=-.5, family = "Times New Roman")) +
+  geom_hline(yintercept=0,size=1.2, alpha=0.8,colour="red", linetype="twodash")+
+  theme(plot.margin = unit(c(1, 1, .5, .7), "cm"))
+
+
+```
+
+
+We can see that the confidence individuals of a large number of households do not overlap with this line. In a single level model, all these households would be fit in a similar way, however there is clearly large differences between households, therefore we can expect an improvement in fit in moving to a two level model with households at level 2.
+
+We can also conduct likelihood-ratio tests to asses whether the addition of region at level two provides an improvement in fit over a single level model, and whether a three-level model with household at level two and region at level three provides an improvement in fit over the two-level models.
+
+The likelihood-ratio test statistic for the addition of region at level two is approximately 20.19, which suggest a highly statistically significant improvement in fit.
+
+The likelihood-ratio test statistic for the three-level model is approximately 94.3 when compared to the two-level model with region at level two, and approximately 20 when compared to the two-level model with household at level two. It both cases the test suggests strongly statistically significant improvements in model fit. 
+
+
+

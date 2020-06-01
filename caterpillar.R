@@ -65,7 +65,7 @@ color.title = palette[9]
 
 # Plot
 
-k <- ggplot()+
+ggplot()+
   geom_pointrange(data=u0tab,mapping=aes(x=u0tab$u0rank , y=u0tab$u0,ymin=d$X.Intercept..1,ymax=d$X.Intercept.), position="identity", size=0.1, color="dodgerblue4", alpha = 0.5)+
   geom_point(data=u0tab,mapping=aes(x=u0tab$u0rank , y=u0tab$u0))+
   theme_bw() +
@@ -87,4 +87,4 @@ k <- ggplot()+
   theme(axis.title.x=element_text(size=17,colour="#535353",face="bold",vjust=-.5)) +
   geom_hline(yintercept=0,size=1.2, alpha=0.8,colour="red", linetype="twodash")+
   theme(plot.margin = unit(c(1, 1, .5, .7), "cm"))
-k
+

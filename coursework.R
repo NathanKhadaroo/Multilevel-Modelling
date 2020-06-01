@@ -1,3 +1,4 @@
+install.packages('tidyverse', dependencies = TRUE)
 
 library(sjPlot)
 library(sjmisc)
@@ -64,6 +65,14 @@ nullmodel_threelvl <- lmer(nhood_mistrust ~ (1|hid) + (1|region), data = mydata,
 summary(nullmodel_threelvl)
 
 #creating a table
+
+stargazer(single_null, twolevel_null_hid,twolevel_null_region,nullmodel_threelvl,
+          intercept.bottom = FALSE,
+          omit.table.layout = "sn",
+          column.labels = c("Single level null", "Two levels (household)", "Two levels (region)","Three levels"),
+          header=FALSE,
+          ci = TRUE,
+          type='latex')
 
 tab_model(single_null, twolevel_null_hid,twolevel_null_region,nullmodel_threelvl, 
           dv.labels = c("Single level null", "Two levels (household)", "Two levels (region)", "Three levels"),
@@ -285,4 +294,66 @@ tab_model(rsmodelhid,
           dv.labels = c("Random slopes model"),
           show.se = TRUE, show.ci = FALSE, show.p = FALSE)
 
+
+#fitting logistic models
+
+lognull <- glm(worry_crime ~ 1, family = binomial("logit"), data = mydata)
+
+summary(lognull)
+
+lognullhid <- glmer(worry_crime ~ (1|hid), family = binomial("logit"), data = mydata) 
+
+summary(lognullhid)
+
+lognullreg <- glmer(worry_crime ~ (1|region), family = binomial("logit"), data = mydata) 
+
+summary(lognullreg)
+
+lognullthreelvl <- glmer(worry_crime ~ (1|hid) + (1|region), family = binomial("logit"), data = mydata) 
+
+summary(lognullthreelvl)
+
+#creating a table
+
+tab_model(lognull, lognullhid, lognullreg, lognullthreelvl, 
+          dv.labels = c("Single level null", "Two levels (household)", "Two levels (region)", "Three levels"),
+          show.se = TRUE, show.ci = FALSE, show.p = FALSE)
+
+#testing for improvement in fit
+
+#reference
+qchisq(0.95, 1)
+qchisq(0.95, 2)
+
+#single level null vs 2 level with hid
+-2*(logLik(lognull)-logLik(lognullhid))
+
+#single level null vs 2 level with region
+-2*(logLik(lognull)-logLik(lognullreg))
+
+#single level null vs 3 level
+-2*(logLik(lognull)-logLik(lognullthreelvl))
+
+#2 level with hid vs 3 level 
+
+-2*(logLik(lognullhid)-logLik(lognullthreelvl))
+
+#2 level with reg vs 3 level 
+
+-2*(logLik(lognullreg)-logLik(lognullthreelvl))
+
+#adding explanatory variables
+
+logmodelreg <- glmer(worry_crime ~ age + sclfsato + urban + school_qual + no_qual + rent_local_auth + rent_private + (1 |region), family = binomial("logit"), data = mydata)
+
+
+#testing for improvement in fit
+
+-2*(logLik(lognullreg)-logLik(logmodelreg))
+
+#creating table
+
+tab_model(logmodelreg,rsmodelhid, 
+          dv.labels = c('Logistic model', 'Linear model' ),
+          show.se = TRUE, show.ci = FALSE, show.p = FALSE)
 
