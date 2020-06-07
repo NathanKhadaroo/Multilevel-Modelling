@@ -1,4 +1,3 @@
-install.packages('tidyverse', dependencies = TRUE)
 
 library(sjPlot)
 library(sjmisc)
@@ -10,7 +9,8 @@ library(lme4)
 library(magrittr)
 library(htmlTable)
 library(RColorBrewer)
-
+library(lattice)
+library(stargazer)
 
 #loading data
 setwd("~/Desktop/Multilevel-Modelling")
@@ -23,7 +23,7 @@ mydata <- drop_na(mydataNAs)
 
 mydata <- dummy_cols(mydata, select_columns = c('hhtenure', 'hiqual3'), remove_first_dummy = TRUE)
 
-mydata <- mydata %>% rename(rent_local_auth = hhtenure_2, rent_private = hhtenure_3,
+mydata <- mydata %>% dplyr::rename(rent_local_auth = hhtenure_2, rent_private = hhtenure_3,
                             school_qual = hiqual3_2, no_qual = hiqual3_3)
 colnames(mydata)
 
@@ -178,15 +178,25 @@ tab_model(model6,
           show.se = TRUE, show.ci = FALSE, show.p = FALSE, show.reflvl = TRUE)
 summary(model6)
 
+
+stargazer(model6,
+          intercept.bottom = FALSE,
+          omit.table.layout = "sn",
+          column.labels = c("Random Intercept Model"),
+          header=FALSE,
+          ci = TRUE,
+          type='latex')
+
 install.packages('texreg')
 library(texreg)
-htmlreg(list(model6), file = "coursework.R.doc", 
+?texreg
+texreg(list(model6), 
         inline.css = FALSE, doctype = TRUE, html.tag = TRUE, 
         head.tag = TRUE, body.tag = TRUE)
 
 #adding random slopes
 
-rsmodelhid <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual + rent_local_auth + rent_private + ( 1+ age |hid) + (1 |region), data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+rsmodelhid <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual + rent_local_auth + rent_private + ( 1 + age |hid) + (1 |region), data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
 
 rsmodelhid
 
@@ -317,8 +327,9 @@ summary(lognullthreelvl)
 
 tab_model(lognull, lognullhid, lognullreg, lognullthreelvl, 
           dv.labels = c("Single level null", "Two levels (household)", "Two levels (region)", "Three levels"),
-          show.se = TRUE, show.ci = FALSE, show.p = FALSE)
+          show.se = TRUE, show.ci = FALSE, show.p = TRUE)
 
+texreg(lognull, lognullhid, lognullreg, lognullthreelvl)
 #testing for improvement in fit
 
 #reference
@@ -344,8 +355,16 @@ qchisq(0.95, 2)
 
 #adding explanatory variables
 
-logmodelreg <- glmer(worry_crime ~ age + sclfsato + urban + school_qual + no_qual + rent_local_auth + rent_private + (1 |region), family = binomial("logit"), data = mydata)
+logmodelreg <- glmer(worry_crime ~ age + sclfsato + urban + school_qual + no_qual 
+                     + rent_local_auth + rent_private  + ageXurban +
+                       ageXrent_local_auth + ageXrent_private + (1 |region), family = binomial("logit"), data = mydata)
 
+logmodelfinal <- glmer(worry_crime ~ sclfsato + urban + school_qual + no_qual 
+                       + (1 |region), family = binomial("logit"), data = mydata)
+
+tab_model(logmodelfinal, 
+          dv.labels = c('Logistic model'),
+          show.se = TRUE, show.ci = FALSE, show.p = TRUE)
 
 #testing for improvement in fit
 
@@ -353,7 +372,134 @@ logmodelreg <- glmer(worry_crime ~ age + sclfsato + urban + school_qual + no_qua
 
 #creating table
 
-tab_model(logmodelreg,rsmodelhid, 
+tab_model(logmodelreg,rsmodelint2level, 
           dv.labels = c('Logistic model', 'Linear model' ),
-          show.se = TRUE, show.ci = FALSE, show.p = FALSE)
+          show.se = TRUE, show.ci = FALSE, show.p = TRUE)
 
+
+#creating interaction terms for age
+mydata$ageXsclfsato <- mydata$age*mydata$sclfsato
+mydata$ageXurban <- mydata$age*mydata$urban
+mydata$ageXfemale <- mydata$age*mydata$female
+mydata$ageXrent_local_auth <- mydata$age*mydata$rent_local_auth
+mydata$ageXrent_private <- mydata$age*mydata$rent_private
+mydata$ageXschool_qual <- mydata$age*mydata$school_qual
+mydata$ageXno_qual <- mydata$age*mydata$no_qual
+mydata$ageXworry_crime <- mydata$age*mydata$worry_crime
+
+colnames(mydata)
+#begin with sclfsato
+
+rsmodelhidint1 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                   + rent_local_auth + rent_private + ageXsclfsato + ( 1 + age |hid) + (1 |region),
+                   data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+rimodelhidint1 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                    + rent_local_auth + rent_private + ageXsclfsato + ( 1|hid) + (1 |region),
+                    data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(model6, rimodelhidint1)
+
+-2*(logLik(model6)-logLik(rimodelhidint1))
+
+#then urban
+
+rsmodelhidint2 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXurban + ( 1 + age |hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+rimodelhidint2 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXurban + ( 1|hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(rsmodelhid, rsmodelhidint2)
+
+anova(model6, rimodelhidint2)
+
+-2*(logLik(rsmodelhid)-logLik(rsmodelhidint2))
+
+#then female
+
+rimodelhidint3 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXfemale + ( 1|hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(model6, rimodelhidint3)
+
+#then hhtenure
+
+rimodelhidint4 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXrent_local_auth + ageXrent_private + ( 1|hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(model6, rimodelhidint4)
+
+#then education
+
+rimodelhidint5 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXschool_qual + ageXno_qual+ ( 1|hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(model6, rimodelhidint5)
+
+#and finally worry crime
+
+rimodelhidint6 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXworry_crime + ( 1|hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(model6, rimodelhidint6)
+
+#final model
+
+rimodelhidint7 <-  lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                        + rent_local_auth + rent_private + ageXworry_crime + ageXurban +
+                          ageXrent_local_auth + ageXrent_private + ( 1|hid) + (1 |region),
+                        data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+#testing for approriateness of rs
+
+rsmodelhidint7 <-  lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                        + rent_local_auth + rent_private + ageXworry_crime + ageXurban +
+                          ageXrent_local_auth + ageXrent_private + ( 1 + age|hid) + (1 |region),
+                        data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+summary(rsmodelhidint7)
+
+anova(rimodelhidint7, rsmodelhidint7)
+
+#testing for appropriateness of three level model
+
+rsmodelint2level <-  lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                        + rent_local_auth + rent_private  + ageXurban +
+                          ageXrent_local_auth + ageXrent_private + ( 1 + age|hid),
+                        data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+anova(rsmodelint2level, rsmodelhidint7)
+
+
+tab_model(rsmodelint2level)
+
+#plotting interaction effects
+mydata2 <- mydata
+
+#first household model (rimodelhidint4)
+mydata2$urban <- mean(mydata$urban)
+mydata2$sclfsato <- mean(mydata$sclfsato)
+mydata2$school_qual <- mean(mydata$school_qual)
+mydata2$no_qual <- mean(mydata$no_qual)
+
+rimodelhidint4 <- lmer(nhood_mistrust ~ age + sclfsato + urban + school_qual + no_qual 
+                       + rent_local_auth + rent_private + ageXrent_local_auth + ageXrent_private + ( 1|hid) + (1 |region),
+                       data = mydata, REML = FALSE, control = lmerControl(check.nobs.vs.nRE = "ignore"))
+
+
+mydata2$predprob <- predict(rimodelhidint4, mydata2,  type = "response")
+
+mydata2 <- mydata2[order(mydata2$age), ]
+
+xyplot(mydata2$predprob ~ mydata2$age, groups = mydata2$hhtenure, type = 
+         c("r"), col = c("green", "blue", "red"), lty = c("solid", "dashed", "dotted"), 
+       xlab = "Age - 16", ylab = "Pr(nhood_mistrust)", ylim = c(1, 5), 
+       aspect = 0.75, key = list(space = "bottom", columns = 2, text = list(c("Owner/mortgaged", 
+      "Local authority/housing association rent", "Private rent")), lines = list(col = c("green", "blue","red"), lty = c("solid", "dashed", "dotted"))))
